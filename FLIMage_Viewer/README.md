@@ -23,31 +23,52 @@ A high-performance, cross-platform viewer and analysis tool for FLIMage `.flim` 
 
 ## Installation & Setup
 
-### 1. macOS (Terminal)
+### Method A: Using Conda (Recommended)
+
+Works identically on **macOS** and **Windows**:
+
 ```bash
-# 1. Create and activate a dedicated virtual environment
-python3 -m venv flim_env
-source flim_env/bin/activate
+# 1. Navigate to the repository
+cd ~/Documents/GitHub/FLIMage_public
 
-# 2. Upgrade pip and install dependencies
-pip install --upgrade pip
-pip install -r FLIMage_Viewer/requirements.txt
+# 2. Create the conda environment from environment.yml
+conda env create -f FLIMage_Viewer/environment.yml
 
-# 3. Launch the viewer
+# 3. Activate the environment
+conda activate flimage_env
+
+# 4. Launch the viewer
 python FLIMage_Viewer/run_viewer.py
 ```
 
-### 2. Windows (PowerShell or Command Prompt)
+*Or manually create a conda environment with commands:*
+```bash
+conda create -n flimage_env python=3.10 -y
+conda activate flimage_env
+conda install -c conda-forge numpy tifffile scipy matplotlib pyqt -y
+pip install pyqtgraph
+python FLIMage_Viewer/run_viewer.py
+```
+
+---
+
+### Method B: Using Standard Python `venv`
+
+#### 1. macOS (Terminal)
+```bash
+python3 -m venv flim_env
+source flim_env/bin/activate
+pip install --upgrade pip
+pip install -r FLIMage_Viewer/requirements.txt
+python FLIMage_Viewer/run_viewer.py
+```
+
+#### 2. Windows (PowerShell)
 ```powershell
-# 1. Create and activate a dedicated virtual environment
 python -m venv flim_env
 .\flim_env\Scripts\activate
-
-# 2. Upgrade pip and install dependencies
 pip install --upgrade pip
 pip install -r FLIMage_Viewer\requirements.txt
-
-# 3. Launch the viewer
 python FLIMage_Viewer\run_viewer.py
 ```
 
