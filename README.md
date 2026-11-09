@@ -30,6 +30,32 @@ contact [Ryohei Yasuda](mailto:ryohei.yasuda@mpfi.org).
 - The FLIMage-built x64 `TCSPC_Decode.dll` runtime binary.
 - MathLibrary source and [API documentation](FLIMage/MathLibrary/API.md).
 - Remote-control examples, Python tools, icons required by the application, and user documentation.
+- `FLIMage_Viewer` — cross-platform desktop GUI, napari reader, and high-speed reader for macOS and Windows.
+
+## Cross-Platform FLIMage Viewer (macOS & Windows)
+
+For users who want to view, inspect, and analyze `.flim` files on **macOS (Apple Silicon M1–M4 & Intel)** or **Windows** without requiring the Windows-only microscope hardware dependencies, a high-performance Python desktop viewer is provided in [`FLIMage_Viewer`](FLIMage_Viewer/).
+
+### Quickstart with Conda
+
+```bash
+# 1. Navigate to the repository
+cd FLIMage_public
+
+# 2. Create the conda environment
+conda env create -f FLIMage_Viewer/environment.yml
+
+# 3. Activate the environment
+conda activate flimage_env
+
+# 4. Launch the GUI
+python FLIMage_Viewer/run_viewer.py
+
+# (Optional) Open a specific file directly:
+python FLIMage_Viewer/run_viewer.py path/to/your_data.flim
+```
+
+See [FLIMage_Viewer/README.md](FLIMage_Viewer/README.md) for features, napari integration, and standard `venv` instructions.
 
 ## Documentation
 
@@ -65,6 +91,7 @@ See [FLIMage/Libraries/README.md](FLIMage/Libraries/README.md) for expected bina
 - `FLIMage/App` — main application.
 - `FLIMage/MathLibrary` — fitting, matrix, image-processing, and FLIM-analysis library.
 - `FLIMage/Utilities` — shared managed utilities.
+- `FLIMage_Viewer` — cross-platform desktop GUI, napari reader, and high-speed FLIM reader.
 - `Hardware` — managed hardware-control source.
 - `PhysiologyCSharp` — physiology acquisition and MC700B integration.
 - `PIPE` — remote-control client/server examples.
