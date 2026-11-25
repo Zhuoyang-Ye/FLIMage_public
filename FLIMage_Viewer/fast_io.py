@@ -11,6 +11,9 @@ Optimized to resolve bottlenecks in legacy C# and Python readers:
 
 import os
 import re
+import hashlib
+import shutil
+import tempfile
 from typing import List, Dict, Any, Optional, Tuple, Union
 import numpy as np
 import tifffile
@@ -120,22 +123,31 @@ class FastFLIM:
             self.metadata = FastHeaderParser.parse_header_text(str(raw_desc))
             self._extract_dimensions_from_metadata()
 
-        # Extract timestamps efficiently from subsequent pages without full parsing
-        for i, page in enumerate(self._tiff_file.pages):
-            tag = page.tags.get("ImageDescription", None)
+        # Defer per-page IFD tag reads when lazy=True to avoid N network seeks on open()
+        self.acq_times = [""] * self.n_pages
+        if self.n_pages > 0:
+            self.acq_times[0] = self.metadata.get("Acquired_Time", "Frame 1") or "Frame 1"
+
+        if not lazy:
+            self.load_all()
+
+    def get_acq_time(self, page_idx: int) -> str:
+        """Lazily read and cache Acquired_Time for a specific page."""
+        if not (0 <= page_idx < self.n_pages):
+            return ""
+        if self.acq_times[page_idx]:
+            return self.acq_times[page_idx]
+        if self._tiff_file is not None:
+            tag = self._tiff_file.pages[page_idx].tags.get("ImageDescription", None)
             if tag is not None:
                 val = tag.value
                 val_str = val.decode("ascii", errors="ignore") if isinstance(val, bytes) else str(val)
                 time_match = re.search(r"Acquired_Time\s*=\s*([^;\r\n]+)", val_str)
                 if time_match:
-                    self.acq_times.append(time_match.group(1).strip().strip('"\''))
-                else:
-                    self.acq_times.append(f"Frame {i+1}")
-            else:
-                self.acq_times.append(f"Frame {i+1}")
-
-        if not lazy:
-            self.load_all()
+                    self.acq_times[page_idx] = time_match.group(1).strip().strip('"\'')
+                    return self.acq_times[page_idx]
+        self.acq_times[page_idx] = f"Frame {page_idx + 1}"
+        return self.acq_times[page_idx]
 
     def _extract_dimensions_from_metadata(self):
         m = self.metadata
@@ -390,3 +402,31 @@ class FastFLIM:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
+
+
+def stage_to_local_cache(
+    file_path: str,
+    cache_dir: Optional[str] = None,
+    chunk_size: int = 4 * 1024 * 1024,
+) -> str:
+    """
+    Sequentially copy a remote/network-drive file (e.g. Z:\\ or /Volumes/...)
+    into a local SSD cache folder using large chunks to avoid SMB random-seek
+    penalties. Reuses cached copy if file size and mtime match.
+    """
+    src = os.path.abspath(file_path)
+    st = os.stat(src)
+    base_cache = cache_dir or os.path.join(tempfile.gettempdir(), "flimage_viewer_cache")
+    os.makedirs(base_cache, exist_ok=True)
+
+    sig = hashlib.sha1(f"{src}|{st.st_size}|{int(st.st_mtime)}".encode("utf-8")).hexdigest()[:12]
+    dst = os.path.join(base_cache, f"{sig}_{os.path.basename(src)}")
+
+    if os.path.exists(dst) and os.path.getsize(dst) == st.st_size:
+        return dst
+
+    tmp_dst = dst + ".part"
+    with open(src, "rb") as fsrc, open(tmp_dst, "wb") as fdst:
+        shutil.copyfileobj(fsrc, fdst, length=chunk_size)
+    os.replace(tmp_dst, dst)
+    return dst

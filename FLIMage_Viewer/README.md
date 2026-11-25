@@ -74,6 +74,24 @@ python FLIMage_Viewer\run_viewer.py
 
 ---
 
+## Fast Z-Drive / `.photon` Workflow
+
+Reading `.photon` archives directly over a network share (`Z:\`) is slow because ZIP/TAR random seeks trigger thousands of SMB round-trips, and raw photon streams must be decoded with Windows-only `TCSPC_Decode.dll`.
+
+1. **Batch-convert `.photon` → `.flim` on Windows** (sequential 4 MB copy to local temp SSD → local decode → save `.flim`):
+   ```powershell
+   # Convert a whole Z-drive folder (skips already-converted files)
+   python FLIMage_Viewer\photon_zdrive.py --input Z:\path\to\experiment
+
+   # Or write .flim outputs directly to a local SSD folder for fastest analysis:
+   python FLIMage_Viewer\photon_zdrive.py --input Z:\path\to\experiment --output D:\flim_cache
+   ```
+2. **Open `.flim` on Mac or Windows**:
+   - `FLIMage_Viewer` uses **lazy page loading** (only Page 0 metadata/pixels are read on open).
+   - Enable **"Cache locally (Z-drive)"** in the GUI toolbar if you want large remote `.flim` files copied sequentially to your local SSD cache once and reused.
+
+---
+
 ## Opening via napari (Optional)
 If you prefer viewing your hyperstacks inside napari:
 ```python

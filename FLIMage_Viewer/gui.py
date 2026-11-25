@@ -14,6 +14,8 @@ Features:
 
 import sys
 import os
+import platform
+from pathlib import Path
 from typing import Optional
 import numpy as np
 
@@ -48,8 +50,30 @@ from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as Navigation
 from matplotlib.figure import Figure
 from matplotlib.patches import Rectangle, Circle
 
-from fast_io import FastFLIM
+from fast_io import FastFLIM, stage_to_local_cache
 from fitting import DecayFitter
+from photon_zdrive import convert_zdrive_photon, find_matching_flim
+
+
+class _ZDriveWorker(QThread):
+    finished_ok = pyqtSignal(str)
+    failed = pyqtSignal(str)
+
+    def __init__(self, path: str, is_photon: bool):
+        super().__init__()
+        self.path = path
+        self.is_photon = is_photon
+
+    def run(self):
+        try:
+            if self.is_photon:
+                out_flim = convert_zdrive_photon(Path(self.path))
+                self.finished_ok.emit(str(out_flim))
+            else:
+                local_path = stage_to_local_cache(self.path)
+                self.finished_ok.emit(local_path)
+        except Exception as exc:
+            self.failed.emit(str(exc))
 
 
 class FLIMViewerGUI(QMainWindow):
@@ -113,10 +137,16 @@ class FLIMViewerGUI(QMainWindow):
 
         # Top Control Bar
         top_bar = QHBoxLayout()
-        self.btn_open = QPushButton("Open .flim File")
+        self.btn_open = QPushButton("Open File")
         self.btn_open.setStyleSheet("font-weight: bold; padding: 6px 12px;")
         self.btn_open.clicked.connect(self._on_open_file_dialog)
         top_bar.addWidget(self.btn_open)
+
+        self.chk_cache_local = QCheckBox("Cache locally (Z-drive)")
+        self.chk_cache_local.setToolTip(
+            "Sequentially copy remote/Z-drive .flim files to local temp SSD before opening."
+        )
+        top_bar.addWidget(self.chk_cache_local)
 
         self.lbl_filename = QLabel("No file loaded")
         self.lbl_filename.setStyleSheet("color: #666; font-style: italic;")
@@ -282,12 +312,55 @@ class FLIMViewerGUI(QMainWindow):
             self,
             "Open FLIM File",
             "",
-            "FLIMage Files (*.flim *.tif *.tiff);;All Files (*)"
+            "FLIMage Files (*.flim *.tif *.tiff *.photon);;All Files (*)"
         )
         if file_path:
             self.load_file(file_path)
 
     def load_file(self, file_path: str):
+        if file_path.lower().endswith(".photon"):
+            sibling_flim = find_matching_flim(Path(file_path))
+            if sibling_flim.exists() and sibling_flim.stat().st_size > 0:
+                file_path = str(sibling_flim)
+            elif platform.system() == "Windows":
+                self._start_zdrive_worker(file_path, is_photon=True)
+                return
+            else:
+                QMessageBox.information(
+                    self,
+                    "Convert .photon on Windows First",
+                    "Raw .photon archives require Windows-only TCSPC_Decode.dll.\n\n"
+                    "Run this on your Windows PC to stage from Z: and convert fast:\n"
+                    f"python FLIMage_Viewer/photon_zdrive.py -i \"{file_path}\"\n\n"
+                    "Then open the resulting .flim file here."
+                )
+                return
+
+        if self.chk_cache_local.isChecked():
+            self._start_zdrive_worker(file_path, is_photon=False)
+            return
+
+        self._open_local_flim(file_path)
+
+    def _start_zdrive_worker(self, file_path: str, is_photon: bool):
+        self.btn_open.setEnabled(False)
+        action = "Staging & decoding .photon" if is_photon else "Caching to local SSD"
+        self.lbl_filename.setText(f"{action}: {os.path.basename(file_path)}...")
+        self._worker = _ZDriveWorker(file_path, is_photon=is_photon)
+        self._worker.finished_ok.connect(self._on_worker_done)
+        self._worker.failed.connect(self._on_worker_failed)
+        self._worker.start()
+
+    def _on_worker_done(self, local_flim_path: str):
+        self.btn_open.setEnabled(True)
+        self._open_local_flim(local_flim_path)
+
+    def _on_worker_failed(self, err: str):
+        self.btn_open.setEnabled(True)
+        self.lbl_filename.setText("Load failed")
+        QMessageBox.critical(self, "Z-Drive Load Error", f"Failed to process file:\n{err}")
+
+    def _open_local_flim(self, file_path: str):
         try:
             self.flim = FastFLIM(file_path)
             self.lbl_filename.setText(f"{os.path.basename(file_path)} ({self.flim.width}x{self.flim.height})")
@@ -334,7 +407,7 @@ class FLIMViewerGUI(QMainWindow):
     # ----------------- Sliders & Controls ----------------- #
     def _on_time_slider_changed(self, val: int):
         self.current_page = val
-        time_str = self.flim.acq_times[val] if self.flim and val < len(self.flim.acq_times) else ""
+        time_str = self.flim.get_acq_time(val) if self.flim else ""
         self.lbl_time_val.setText(f"{val + 1} / {self.flim.n_pages} ({time_str})")
         self.update_image_display()
         self.update_decay_display()
