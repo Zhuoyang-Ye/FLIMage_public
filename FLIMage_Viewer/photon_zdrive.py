@@ -50,9 +50,7 @@ def convert_zdrive_photon(
     """
     if platform.system() != "Windows":
         raise RuntimeError(
-            "Decoding .photon files requires TCSPC_Decode.dll (Windows x64 only).\n"
-            "Run this script on your Windows machine to convert .photon -> .flim,\n"
-            "then open the resulting .flim file in FLIMage_Viewer on macOS or Windows."
+            "Decoding .photon files requires TCSPC_Decode.dll (Windows x64)."
         )
 
     out_flim = find_matching_flim(photon_path, output_dir)

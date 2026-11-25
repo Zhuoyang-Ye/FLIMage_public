@@ -1,9 +1,9 @@
 """
-Cross-platform Desktop GUI for FLIMage (.flim) viewing and analysis.
-Compatible with macOS (Apple Silicon M1-M4 & Intel) and Windows 10/11.
+Python Desktop GUI for FLIMage (.flim / .photon) viewing and analysis.
 
 Features:
-- Instant lazy loading of .flim files via FastFLIM.
+- Fast Z-drive staged .photon -> .flim conversion via TCSPC_Decode.dll.
+- Instant lazy loading of .flim files via FastFLIM + optional local SSD cache.
 - Multi-dimensional navigation: Time pages (T), Z-slices (Z), Channels (Ch).
 - False-color FLIM overlay (Hue=Lifetime, Value=Intensity) & raw intensity viewing.
 - Interactive rectangular / circular ROI selection.
@@ -14,7 +14,6 @@ Features:
 
 import sys
 import os
-import platform
 from pathlib import Path
 from typing import Optional
 import numpy as np
@@ -79,7 +78,7 @@ class _ZDriveWorker(QThread):
 class FLIMViewerGUI(QMainWindow):
     def __init__(self, initial_file: Optional[str] = None):
         super().__init__()
-        self.setWindowTitle("FLIMage Viewer (Cross-Platform)")
+        self.setWindowTitle("FLIMage Python Viewer")
         self.resize(1280, 850)
 
         self.flim: Optional[FastFLIM] = None
@@ -322,18 +321,8 @@ class FLIMViewerGUI(QMainWindow):
             sibling_flim = find_matching_flim(Path(file_path))
             if sibling_flim.exists() and sibling_flim.stat().st_size > 0:
                 file_path = str(sibling_flim)
-            elif platform.system() == "Windows":
-                self._start_zdrive_worker(file_path, is_photon=True)
-                return
             else:
-                QMessageBox.information(
-                    self,
-                    "Convert .photon on Windows First",
-                    "Raw .photon archives require Windows-only TCSPC_Decode.dll.\n\n"
-                    "Run this on your Windows PC to stage from Z: and convert fast:\n"
-                    f"python FLIMage_Viewer/photon_zdrive.py -i \"{file_path}\"\n\n"
-                    "Then open the resulting .flim file here."
-                )
+                self._start_zdrive_worker(file_path, is_photon=True)
                 return
 
         if self.chk_cache_local.isChecked():
@@ -618,10 +607,9 @@ class FLIMViewerGUI(QMainWindow):
     def _show_about(self):
         QMessageBox.about(
             self,
-            "About FLIMage Viewer",
-            "<h3>FLIMage Cross-Platform Viewer</h3>"
-            "<p>High-performance viewer and analysis tool for FLIMage .flim files.</p>"
-            "<p>Supports macOS (Apple Silicon & Intel) and Windows.</p>"
+            "About FLIMage Python Viewer",
+            "<h3>FLIMage Python Viewer</h3>"
+            "<p>Fast Python viewer and Z-drive analysis tool for FLIMage .flim and .photon files.</p>"
         )
 
 
